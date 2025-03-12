@@ -1,12 +1,12 @@
-import { Button } from "@/components/ui/button"
+import Game from './Game'
+import { ThemeProvider } from "@/components/theme-provider"
 
 
 function App() {
- 
   return (
-    <><Button variant="outline">Button</Button>
-
-    </>
+    <ThemeProvider defaultTheme="dark" storageKey="vite-ui-theme">
+     <Game/>
+    </ThemeProvider>
   )
 }
 
