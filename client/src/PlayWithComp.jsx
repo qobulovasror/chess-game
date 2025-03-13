@@ -1,66 +1,58 @@
-import React, { Component } from "react";
-import PropTypes from "prop-types";
-import { Chess } from "chess.js"; // import Chess from  "chess.js"(default) if recieving an error about new Chess not being a constructor
+import React, { useEffect, useState } from 'react';
+import { Chess } from 'chess.js';
+import { Chessboard } from 'react-chessboard';
+
+// import PropTypes from "prop-types";
+// static propTypes = { children: PropTypes.func };
 
 const STOCKFISH = window.STOCKFISH;
 const game = new Chess();
 
-class Stockfish extends Component {
-  static propTypes = { children: PropTypes.func };
+function PlayWithComputer() {
+  const [fen, setFen] = useState('start');
 
-  state = { fen: "start" };
-
-  componentDidMount() {
-    this.setState({ fen: game.fen() });
-
-    this.engineGame().prepareMove();
-  }
-
-  onDrop = ({ sourceSquare, targetSquare }) => {
-    // see if the move is legal
+  const onDrop = ({ sourceSquare, targetSquare }) => {
     const move = game.move({
       from: sourceSquare,
       to: targetSquare,
-      promotion: "q"
+      promotion: 'q', // faqat piyoda yetib borganida amal qiladi
     });
-
-    // illegal move
-    if (move === null) return;
-
-    return new Promise(resolve => {
-      this.setState({ fen: game.fen() });
-      resolve();
-    }).then(() => this.engineGame().prepareMove());
+  
+    if (!move) return false; // Noto‘g‘ri yurish bo‘lsa, bekor qilamiz
+  
+    setFen(game.fen()); // FEN yangilandi
+    engineGame().prepareMove();
+    return true; // Harakat bajarildi
   };
 
-  engineGame = options => {
+  const engineGame = (options) => {
     options = options || {};
 
     /// We can load Stockfish via Web Workers or via STOCKFISH() if loaded from a <script> tag.
     let engine =
-      typeof STOCKFISH === "function"
+      typeof STOCKFISH === 'function'
         ? STOCKFISH()
-        : new Worker(options.stockfishjs || "stockfish.js");
+        : new Worker(options.stockfishjs || 'stockfish.js');
     let evaler =
-      typeof STOCKFISH === "function"
+      typeof STOCKFISH === 'function'
         ? STOCKFISH()
-        : new Worker(options.stockfishjs || "stockfish.js");
+        : new Worker(options.stockfishjs || 'stockfish.js');
     let engineStatus = {};
     let time = { wtime: 3000, btime: 3000, winc: 1500, binc: 1500 };
-    let playerColor = "black";
+    let playerColor = 'black';
     let clockTimeoutID = null;
     // let isEngineRunning = false;
-    let announced_game_over;
+    let announced_isGameOver;
     // do not pick up pieces if the game is over
     // only pick up pieces for White
 
-    setInterval(function() {
-      if (announced_game_over) {
+    setInterval(function () {
+      if (announced_isGameOver) {
         return;
       }
 
-      if (game.game_over()) {
-        announced_game_over = true;
+      if (game.isGameOver()) {
+        announced_isGameOver = true;
       }
     }, 500);
 
@@ -69,11 +61,11 @@ class Stockfish extends Component {
 
       (which || engine).postMessage(cmd);
     }
-    uciCmd("uci");
+    uciCmd('uci');
 
     function clockTick() {
       let t =
-        (time.clockColor === "white" ? time.wtime : time.btime) +
+        (time.clockColor === 'white' ? time.wtime : time.btime) +
         time.startTime -
         Date.now();
       let timeToNextSecond = (t % 1000) + 1;
@@ -88,7 +80,7 @@ class Stockfish extends Component {
       if (time.startTime > 0) {
         let elapsed = Date.now() - time.startTime;
         time.startTime = null;
-        if (time.clockColor === "white") {
+        if (time.clockColor === 'white') {
           time.wtime = Math.max(0, time.wtime - elapsed);
         } else {
           time.btime = Math.max(0, time.btime - elapsed);
@@ -97,25 +89,25 @@ class Stockfish extends Component {
     }
 
     function startClock() {
-      if (game.turn() === "w") {
+      if (game.turn() === 'w') {
         time.wtime += time.winc;
-        time.clockColor = "white";
+        time.clockColor = 'white';
       } else {
         time.btime += time.binc;
-        time.clockColor = "black";
+        time.clockColor = 'black';
       }
       time.startTime = Date.now();
       clockTick();
     }
 
     function get_moves() {
-      let moves = "";
+      let moves = '';
       let history = game.history({ verbose: true });
 
       for (let i = 0; i < history.length; ++i) {
         let move = history[i];
         moves +=
-          " " + move.from + move.to + (move.promotion ? move.promotion : "");
+          ' ' + move.from + move.to + (move.promotion ? move.promotion : '');
       }
 
       return moves;
@@ -123,31 +115,30 @@ class Stockfish extends Component {
 
     const prepareMove = () => {
       stopClock();
-      // this.setState({ fen: game.fen() });
-      let turn = game.turn() === "w" ? "white" : "black";
-      if (!game.game_over()) {
+      let turn = game.turn() === 'w' ? 'white' : 'black';
+      if (!game.isGameOver()) {
         // if (turn === playerColor) {
         if (turn !== playerColor) {
           // playerColor = playerColor === 'white' ? 'black' : 'white';
-          uciCmd("position startpos moves" + get_moves());
-          uciCmd("position startpos moves" + get_moves(), evaler);
-          uciCmd("eval", evaler);
+          uciCmd('position startpos moves' + get_moves());
+          uciCmd('position startpos moves' + get_moves(), evaler);
+          uciCmd('eval', evaler);
 
           if (time && time.wtime) {
             uciCmd(
-              "go " +
-                (time.depth ? "depth " + time.depth : "") +
-                " wtime " +
+              'go ' +
+                (time.depth ? 'depth ' + time.depth : '') +
+                ' wtime ' +
                 time.wtime +
-                " winc " +
+                ' winc ' +
                 time.winc +
-                " btime " +
+                ' btime ' +
                 time.btime +
-                " binc " +
+                ' binc ' +
                 time.binc
             );
           } else {
-            uciCmd("go " + (time.depth ? "depth " + time.depth : ""));
+            uciCmd('go ' + (time.depth ? 'depth ' + time.depth : ''));
           }
           // isEngineRunning = true;
         }
@@ -157,10 +148,10 @@ class Stockfish extends Component {
       }
     };
 
-    evaler.onmessage = function(event) {
+    evaler.onmessage = function (event) {
       let line;
 
-      if (event && typeof event === "object") {
+      if (event && typeof event === 'object') {
         line = event.data;
       } else {
         line = event;
@@ -170,26 +161,26 @@ class Stockfish extends Component {
 
       /// Ignore some output.
       if (
-        line === "uciok" ||
-        line === "readyok" ||
-        line.substr(0, 11) === "option name"
+        line === 'uciok' ||
+        line === 'readyok' ||
+        line.substr(0, 11) === 'option name'
       ) {
         return;
       }
     };
 
-    engine.onmessage = event => {
+    engine.onmessage = (event) => {
       let line;
 
-      if (event && typeof event === "object") {
+      if (event && typeof event === 'object') {
         line = event.data;
       } else {
         line = event;
       }
       // console.log('Reply: ' + line);
-      if (line === "uciok") {
+      if (line === 'uciok') {
         engineStatus.engineLoaded = true;
-      } else if (line === "readyok") {
+      } else if (line === 'readyok') {
         engineStatus.engineReady = true;
       } else {
         let match = line.match(/^bestmove ([a-h][1-8])([a-h][1-8])([qrbn])?/);
@@ -197,34 +188,34 @@ class Stockfish extends Component {
         if (match) {
           // isEngineRunning = false;
           game.move({ from: match[1], to: match[2], promotion: match[3] });
-          this.setState({ fen: game.fen() });
+          setFen(game.fen());
           prepareMove();
-          uciCmd("eval", evaler);
+          uciCmd('eval', evaler);
           //uciCmd("eval");
           /// Is it sending feedback?
         } else if (
           (match = line.match(/^info .*\bdepth (\d+) .*\bnps (\d+)/))
         ) {
-          engineStatus.search = "Depth: " + match[1] + " Nps: " + match[2];
+          engineStatus.search = 'Depth: ' + match[1] + ' Nps: ' + match[2];
         }
 
         /// Is it sending feed back with a score?
         if ((match = line.match(/^info .*\bscore (\w+) (-?\d+)/))) {
-          let score = parseInt(match[2], 10) * (game.turn() === "w" ? 1 : -1);
+          let score = parseInt(match[2], 10) * (game.turn() === 'w' ? 1 : -1);
           /// Is it measuring in centipawns?
-          if (match[1] === "cp") {
+          if (match[1] === 'cp') {
             engineStatus.score = (score / 100.0).toFixed(2);
             /// Did it find a mate?
-          } else if (match[1] === "mate") {
-            engineStatus.score = "Mate in " + Math.abs(score);
+          } else if (match[1] === 'mate') {
+            engineStatus.score = 'Mate in ' + Math.abs(score);
           }
 
           /// Is the score bounded?
           if ((match = line.match(/\b(upper|lower)bound\b/))) {
             engineStatus.score =
-              ((match[1] === "upper") === (game.turn() === "w")
-                ? "<= "
-                : ">= ") + engineStatus.score;
+              ((match[1] === 'upper') === (game.turn() === 'w')
+                ? '<= '
+                : '>= ') + engineStatus.score;
           }
         }
       }
@@ -232,24 +223,39 @@ class Stockfish extends Component {
     };
 
     return {
-      start: function() {
-        uciCmd("ucinewgame");
-        uciCmd("isready");
+      start: function () {
+        uciCmd('ucinewgame');
+        uciCmd('isready');
         engineStatus.engineReady = false;
         engineStatus.search = null;
         prepareMove();
-        announced_game_over = false;
+        announced_isGameOver = false;
       },
-      prepareMove: function() {
+      prepareMove: function () {
         prepareMove();
-      }
+      },
     };
   };
 
-  render() {
-    const { fen } = this.state;
-    return this.props.children({ position: fen, onDrop: this.onDrop });
-  }
+  useEffect(() => {
+    setFen(game.fen());
+    engineGame().prepareMove();
+  }, [fen]);
+  return (
+    <Chessboard
+      id="stockfish"
+      position={fen}
+      onDrop={onDrop}
+      width={320}
+      boardStyle={boardStyle}
+      orientation="black"
+    />
+  );
 }
 
-export default Stockfish;
+export default PlayWithComputer;
+
+const boardStyle = {
+  borderRadius: '5px',
+  boxShadow: `0 5px 15px rgba(0, 0, 0, 0.5)`,
+};
