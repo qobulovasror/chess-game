@@ -3,7 +3,6 @@ import Game from "./Game";
 import { ThemeProvider } from "@/components/theme-provider";
 import Home from "./Home";
 import Multiplyer from "./Multiplyer";
-import PlayWithComp from "./PlayWithComp";
 import PlayWithComputer from "./PlayWithComp";
 
 function App() {

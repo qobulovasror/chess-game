@@ -1,28 +1,37 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Chess } from 'chess.js';
 import { Chessboard } from 'react-chessboard';
 
-// import PropTypes from "prop-types";
-// static propTypes = { children: PropTypes.func };
-
-const STOCKFISH = window.STOCKFISH;
-const game = new Chess();
+const STOCKFISH = window.STOCKFISH || 'https://cdn.jsdelivr.net/gh/nmrugg/stockfish.js/src/stockfish.asm.js';
 
 function PlayWithComputer() {
   const [fen, setFen] = useState('start');
+  const [engine, setEngine] = useState(null);
+  const gameRef = useRef(new Chess());
+
+  useEffect(() => {
+    setFen(gameRef.current.fen());
+    const newEngine = engineGame();
+    newEngine.prepareMove();
+    setEngine(newEngine);
+  }, []);
 
   const onDrop = ({ sourceSquare, targetSquare }) => {
+    const game = gameRef.current; 
     const move = game.move({
       from: sourceSquare,
       to: targetSquare,
-      promotion: 'q', // faqat piyoda yetib borganida amal qiladi
+      promotion: 'q',
     });
   
-    if (!move) return false; // Noto‘g‘ri yurish bo‘lsa, bekor qilamiz
+    if (!move) return false;
   
-    setFen(game.fen()); // FEN yangilandi
-    engineGame().prepareMove();
-    return true; // Harakat bajarildi
+    setFen(game.fen());
+  
+    if (engine) {
+      engine.prepareMove(); // mavjud engine orqali chaqirish
+    }
+    return true;
   };
 
   const engineGame = (options) => {
@@ -37,6 +46,9 @@ function PlayWithComputer() {
       typeof STOCKFISH === 'function'
         ? STOCKFISH()
         : new Worker(options.stockfishjs || 'stockfish.js');
+
+    // let engine = STOCKFISH()
+
     let engineStatus = {};
     let time = { wtime: 3000, btime: 3000, winc: 1500, binc: 1500 };
     let playerColor = 'black';
@@ -51,7 +63,7 @@ function PlayWithComputer() {
         return;
       }
 
-      if (game.isGameOver()) {
+      if (gameRef.current.isGameOver()) {
         announced_isGameOver = true;
       }
     }, 500);
@@ -89,7 +101,7 @@ function PlayWithComputer() {
     }
 
     function startClock() {
-      if (game.turn() === 'w') {
+      if (gameRef.current.turn() === 'w') {
         time.wtime += time.winc;
         time.clockColor = 'white';
       } else {
@@ -102,7 +114,7 @@ function PlayWithComputer() {
 
     function get_moves() {
       let moves = '';
-      let history = game.history({ verbose: true });
+      let history = gameRef.current.history({ verbose: true });
 
       for (let i = 0; i < history.length; ++i) {
         let move = history[i];
@@ -115,8 +127,8 @@ function PlayWithComputer() {
 
     const prepareMove = () => {
       stopClock();
-      let turn = game.turn() === 'w' ? 'white' : 'black';
-      if (!game.isGameOver()) {
+      let turn = gameRef.current.turn() === 'w' ? 'white' : 'black';
+      if (!gameRef.current.isGameOver()) {
         // if (turn === playerColor) {
         if (turn !== playerColor) {
           // playerColor = playerColor === 'white' ? 'black' : 'white';
@@ -142,7 +154,7 @@ function PlayWithComputer() {
           }
           // isEngineRunning = true;
         }
-        if (game.history().length >= 2 && !time.depth && !time.nodes) {
+        if (gameRef.current.history().length >= 2 && !time.depth && !time.nodes) {
           startClock();
         }
       }
@@ -187,8 +199,8 @@ function PlayWithComputer() {
         /// Did the AI move?
         if (match) {
           // isEngineRunning = false;
-          game.move({ from: match[1], to: match[2], promotion: match[3] });
-          setFen(game.fen());
+          gameRef.current.move({ from: match[1], to: match[2], promotion: match[3] });
+          setFen(gameRef.current.fen());
           prepareMove();
           uciCmd('eval', evaler);
           //uciCmd("eval");
@@ -201,7 +213,7 @@ function PlayWithComputer() {
 
         /// Is it sending feed back with a score?
         if ((match = line.match(/^info .*\bscore (\w+) (-?\d+)/))) {
-          let score = parseInt(match[2], 10) * (game.turn() === 'w' ? 1 : -1);
+          let score = parseInt(match[2], 10) * (gameRef.current.turn() === 'w' ? 1 : -1);
           /// Is it measuring in centipawns?
           if (match[1] === 'cp') {
             engineStatus.score = (score / 100.0).toFixed(2);
@@ -213,7 +225,7 @@ function PlayWithComputer() {
           /// Is the score bounded?
           if ((match = line.match(/\b(upper|lower)bound\b/))) {
             engineStatus.score =
-              ((match[1] === 'upper') === (game.turn() === 'w')
+              ((match[1] === 'upper') === (gameRef.current.turn() === 'w')
                 ? '<= '
                 : '>= ') + engineStatus.score;
           }
@@ -237,10 +249,7 @@ function PlayWithComputer() {
     };
   };
 
-  useEffect(() => {
-    setFen(game.fen());
-    engineGame().prepareMove();
-  }, [fen]);
+
   return (
     <Chessboard
       id="stockfish"
