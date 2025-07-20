@@ -28,7 +28,8 @@ io.on('connection', (socket) => {
     rooms.set(roomId, {
       // <- 3
       roomId,
-      players: [{ id: socket.id, username: socket.data?.username }],
+      players: [{ id: socket.id, username: socket.data?.username, orientation: 'white' }],
+      roomState: 'waiting',
     });
     // returns Map(1){'2b5b51a9-707b-42d6-9da8-dc19f863c0d0' => [{id: 'socketid', username: 'username1'}]}
 
@@ -77,8 +78,9 @@ io.on('connection', (socket) => {
       ...room,
       players: [
         ...room.players,
-        { id: socket.id, username: socket.data?.username },
+        { id: socket.id, username: socket.data?.username, orientation: 'black' },
       ],
+      roomState: 'waiting',
     };
 
     rooms.set(args.roomId, roomUpdate);
@@ -87,6 +89,14 @@ io.on('connection', (socket) => {
 
     // emit an 'opponentJoined' event to the room to tell the other player that an opponent has joined
     socket.to(args.roomId).emit('opponentJoined', roomUpdate);
+  });
+
+  socket.on('startGame', (roomId) => {
+    const room = rooms.get(roomId);
+    if (room) {
+      socket.to(roomId).emit('startedGame', room); // <- 1
+    }
+    rooms.set(roomId, { ...room, players: room.players, roomState: 'playing' });
   });
 
   socket.on('move', (data) => {
@@ -111,6 +121,14 @@ io.on('connection', (socket) => {
         socket.to(room.roomId).emit('playerDisconnected', userInRoom); // <- 4
       }
     });
+  });
+
+  socket.on('cancelRoom', (roomId) => {
+    const room = rooms.get(roomId);
+    if (room) {
+      socket.to(roomId).emit('cancelRoom', roomId); // <- 1 inform others in the room that the room is cancelled
+      rooms.delete(roomId); // <- 2 delete the room from the rooms map
+    }
   });
 
   socket.on('closeRoom', async (data) => {
