@@ -1,7 +1,4 @@
 {
-  "watch": [
-    "server"
-  ],
   "ext": "js",
   "ignore": [
     "*.test.ts"

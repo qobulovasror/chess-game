@@ -1,7 +1,10 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useRef } from 'react';
 import { Chessboard } from 'react-chessboard';
 import { Chess } from 'chess.js';
 // import CustomDialog from "./components/CustomDialog";
+import Confetti from 'react-confetti'
+import { useWindowSize } from 'react-use'
+import winsound from '../assets/win.mp3';
 
 export default function Game({ players, room, orientation, cleanup }) {
   const chess = useMemo(() => new Chess(), []); // <- 1
@@ -10,6 +13,8 @@ export default function Game({ players, room, orientation, cleanup }) {
   const [squareStyles, setSquareStyles] = useState({});
   const [history, setHistory] = useState([]);
   const [pieceSquare, setPieceSquare] = useState('');
+  const { width, height } = useWindowSize();
+  const audioRef = useRef(new Audio(winsound));
 
   // onDrop function
   function onDrop(sourceSquare, targetSquare) {
@@ -47,6 +52,11 @@ export default function Game({ players, room, orientation, cleanup }) {
             setOver(
               `Checkmate! ${chess.turn() === 'w' ? 'black' : 'white'} wins!`
             );
+
+            if(chess.turn() === 'w' && orientation === 'black' || chess.turn() === 'b' && orientation === 'white') {
+              audioRef.current.play();
+            }
+
             // The winner is determined by checking which side made the last move
           } else if (chess.isDraw()) {
             // if it is a draw
@@ -139,10 +149,24 @@ export default function Game({ players, room, orientation, cleanup }) {
   // Game component returned jsx
   return (
     <div className='bg-gray-900 text-white w-full h-screen'>
+      <Confetti 
+        width={width}
+        height={height}
+        numberOfPieces={500}
+        recycle={false}
+        run={over.includes('wins') && ((over.includes('black') && orientation === 'black') || over.includes('white') && (orientation === 'white'))}
+      />
       <div className='container mx-auto flex flex-col justify-center items-center'>
         {
           over && (
-            <div className={`${over.includes('Draw') ? 'bg-yellow-500' : over.includes('wins') && chess.turn() === 'w' && orientation === 'black' ? 'bg-green-500' : 'bg-red-500'} absolute shadow-md text-white py-3 rounded-md mb-4 px-4 my-1`}>
+            <div
+              className={`${
+                over.includes('Draw') ? 
+                  'bg-yellow-500' : 
+                  (over.includes('wins') && ((over.includes('black') && orientation === 'black') || over.includes('white') && (orientation === 'white')) ? 
+                    'bg-green-500' : 
+                    'bg-red-500')} absolute shadow-md text-white py-3 rounded-md mb-4 px-4 my-1`}
+            >
               {over}
             </div>
           )
