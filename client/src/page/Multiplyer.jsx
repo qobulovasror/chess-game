@@ -47,9 +47,35 @@ export default function Multiplayer() {
     });
   }, [cleanup]);
 
+  // return (
+  //   <div>
+  //     {gameStarted && room ? (
+  //       <Game
+  //         players={players}
+  //         userName={userName}
+  //         room={room}
+  //         orientation={orientation}
+  //         cleanup={cleanup}
+  //       />
+  //     ) : (
+  //       <BeforeStart
+  //         userName={userName}
+  //         setUserName={setUserName}
+  //         setGameStarted={setGameStarted}
+  //         gameCode={gameCode}
+  //         setGameCode={setGameCode}
+  //         setRoom={setRoom}
+  //         room={room}
+  //         players={players}
+  //         setPlayers={setPlayers}
+  //         cleanup={cleanup}
+  //         setOrientation={setOrientation}
+  //       />
+  //     )}
+  //   </div>
+  // );
   return (
     <div>
-      {gameStarted && room ? (
         <Game
           players={players}
           userName={userName}
@@ -57,21 +83,6 @@ export default function Multiplayer() {
           orientation={orientation}
           cleanup={cleanup}
         />
-      ) : (
-        <BeforeStart
-          userName={userName}
-          setUserName={setUserName}
-          setGameStarted={setGameStarted}
-          gameCode={gameCode}
-          setGameCode={setGameCode}
-          setRoom={setRoom}
-          room={room}
-          players={players}
-          setPlayers={setPlayers}
-          cleanup={cleanup}
-          setOrientation={setOrientation}
-        />
-      )}
     </div>
   );
 }
