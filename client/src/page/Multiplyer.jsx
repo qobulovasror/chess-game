@@ -37,50 +37,43 @@ export default function Multiplayer() {
     });
     socket.on('closeRoom', (data) => {
       toast.info(`Room ${data.roomId} has been closed`);
+      setGameStarted(false);
       cleanup();
     });
-    socket.on('playerDisconnected', (user) => {
+    socket.on('playerDisconnected', (user) => { 
       toast.info(`${user.username} has disconnected`);
+      setGameStarted(false);
       cleanup();
     });
   }, [cleanup]);
 
-  // return (
-  //   <div>
-  //     {!gameStarted && !room ? (
-  //       <BeforeStart
-  //         userName={userName}
-  //         setUserName={setUserName}
-  //         setGameStarted={setGameStarted}
-  //         gameCode={gameCode}
-  //         setGameCode={setGameCode}
-  //         setRoom={setRoom}
-  //         room={room}
-  //         players={players}
-  //         setPlayers={setPlayers}
-  //         cleanup={cleanup}
-  //         setOrientation={setOrientation}
-  //       />
-  //     ) : (
-  //       <Game 
-  //         players={players}
-  //         userName={userName}
-  //         room={room} 
-  //         orientation={orientation}
-  //         cleanup={cleanup}
-  //         />
-  //     )}
-  //   </div>
-  // );
   return (
-        <Game 
+    <div>
+      {gameStarted && room ? (
+        <Game
           players={players}
           userName={userName}
-          room={room} 
+          room={room}
           orientation={orientation}
           cleanup={cleanup}
-          />
-      )
+        />
+      ) : (
+        <BeforeStart
+          userName={userName}
+          setUserName={setUserName}
+          setGameStarted={setGameStarted}
+          gameCode={gameCode}
+          setGameCode={setGameCode}
+          setRoom={setRoom}
+          room={room}
+          players={players}
+          setPlayers={setPlayers}
+          cleanup={cleanup}
+          setOrientation={setOrientation}
+        />
+      )}
+    </div>
+  );
 }
 
 const BeforeStart = (props) => {
@@ -120,7 +113,8 @@ const BeforeStart = (props) => {
     socket.emit('username', userName);
     socket.emit('joinRoom', { roomId: gameCode }, (r) => {
       // r is the response from the server
-      if (r.error) return toast.error(r.message ? r.message : 'Error joining room'); // if an error is returned in the response set roomError to the error message and exit
+      if (r.error)
+        return toast.error(r.message ? r.message : 'Error joining room'); // if an error is returned in the response set roomError to the error message and exit
       console.log('response:', r);
       setRoom(r?.roomId); // set room to the room ID
       setPlayers(r?.players); // set players array to the array of players in the room
@@ -130,7 +124,7 @@ const BeforeStart = (props) => {
     });
   };
 
-  useEffect(()=>{
+  useEffect(() => {
     socket.on('startedGame', () => {
       toast.info('Game started');
       setIsWaiting(false);
@@ -219,7 +213,8 @@ const BeforeStart = (props) => {
 };
 
 const WaitingForPlayers = (props) => {
-  const { gameType, setIsWaiting, setGameStarted, room, players, cleanup } = props;
+  const { gameType, setIsWaiting, setGameStarted, room, players, cleanup } =
+    props;
 
   const startGame = () => {
     socket.emit('startGame', room);
@@ -267,8 +262,12 @@ const WaitingForPlayers = (props) => {
           <ul className="list-disc list-inside mt-2">
             {players.map((player, index) => (
               <li key={index} className="text-white">
-                {player.username}{" "}
-                {player.orientation ? player.orientation : player.id==socket.id ? 'white' : 'black'} {" "}
+                {player.username}{' '}
+                {player.orientation
+                  ? player.orientation
+                  : player.id == socket.id
+                  ? 'white'
+                  : 'black'}{' '}
                 {player.id === socket.id ? '(You)' : ''}
               </li>
             ))}

@@ -1,20 +1,22 @@
-import { useState, useMemo, useCallback, useRef } from 'react';
+import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { Chessboard } from 'react-chessboard';
 import { Chess } from 'chess.js';
-// import CustomDialog from "./components/CustomDialog";
-import Confetti from 'react-confetti'
-import { useWindowSize } from 'react-use'
+import Confetti from 'react-confetti';
+import { useWindowSize } from 'react-use';
 import winsound from '../assets/win.mp3';
+import socket from '@/socket';
 
 export default function Game({ players, room, orientation, cleanup }) {
   const chess = useMemo(() => new Chess(), []); // <- 1
   const [fen, setFen] = useState(chess.fen()); // <- 2
-  const [over, setOver] = useState("Draw");
+  const [over, setOver] = useState('');
   const [squareStyles, setSquareStyles] = useState({});
   const [history, setHistory] = useState([]);
   const [pieceSquare, setPieceSquare] = useState('');
   const { width, height } = useWindowSize();
   const audioRef = useRef(new Audio(winsound));
+
+  console.log(players, room, orientation);
 
   // onDrop function
   function onDrop(sourceSquare, targetSquare) {
@@ -53,7 +55,10 @@ export default function Game({ players, room, orientation, cleanup }) {
               `Checkmate! ${chess.turn() === 'w' ? 'black' : 'white'} wins!`
             );
 
-            if(chess.turn() === 'w' && orientation === 'black' || chess.turn() === 'b' && orientation === 'white') {
+            if (
+              (chess.turn() === 'w' && orientation === 'black') ||
+              (chess.turn() === 'b' && orientation === 'white')
+            ) {
               audioRef.current.play();
             }
 
@@ -68,10 +73,11 @@ export default function Game({ players, room, orientation, cleanup }) {
 
         return result;
       } catch (e) {
+        console.log('Error in makeAMove', e);
         return null;
       } // null if the move was illegal, the move object if the move was legal
     },
-    [chess]
+    [chess, orientation]
   );
 
   // keep clicked square style and remove hint squares
@@ -85,6 +91,7 @@ export default function Game({ players, room, orientation, cleanup }) {
   const highlightSquare = (sourceSquare, squaresToHighlight) => {
     console.log('highlightSquare', sourceSquare, squaresToHighlight);
     const res = squareStyling({ history, pieceSquare });
+    console.log(res);
     const highlightStyles = [sourceSquare, ...squaresToHighlight].reduce(
       (a, c) => {
         return {
@@ -146,31 +153,57 @@ export default function Game({ players, room, orientation, cleanup }) {
     setPieceSquare('');
   };
 
+  useEffect(() => {
+    socket.on('move', (move) => {
+      makeAMove(move);
+    });
+  }, [makeAMove]);
+
+  useEffect(() => {
+    socket.on('playerDisconnected', (player) => {
+      setOver(`${player.username} has disconnected`); // set game over
+    });
+  }, []);
+
+  useEffect(() => {
+    socket.on('closeRoom', ({ roomId }) => {
+      console.log('closeRoom', roomId, room);
+      if (roomId === room) {
+        cleanup();
+      }
+    });
+  }, [room, cleanup]);
+
   // Game component returned jsx
   return (
-    <div className='bg-gray-900 text-white w-full h-screen'>
-      <Confetti 
+    <div className="bg-gray-900 text-white w-full h-screen">
+      <Confetti
         width={width}
         height={height}
         numberOfPieces={500}
         recycle={false}
-        run={over.includes('wins') && ((over.includes('black') && orientation === 'black') || over.includes('white') && (orientation === 'white'))}
-      />
-      <div className='container mx-auto flex flex-col justify-center items-center'>
-        {
-          over && (
-            <div
-              className={`${
-                over.includes('Draw') ? 
-                  'bg-yellow-500' : 
-                  (over.includes('wins') && ((over.includes('black') && orientation === 'black') || over.includes('white') && (orientation === 'white')) ? 
-                    'bg-green-500' : 
-                    'bg-red-500')} absolute shadow-md text-white py-3 rounded-md mb-4 px-4 my-1`}
-            >
-              {over}
-            </div>
-          )
+        run={
+          over.includes('wins') &&
+          ((over.includes('black') && orientation === 'black') ||
+            (over.includes('white') && orientation === 'white'))
         }
+      />
+      <div className="container mx-auto flex flex-col justify-center items-center">
+        {over && (
+          <div
+            className={`${
+              over.includes('Draw')
+                ? 'bg-yellow-500'
+                : over.includes('wins') &&
+                  ((over.includes('black') && orientation === 'black') ||
+                    (over.includes('white') && orientation === 'white'))
+                ? 'bg-green-500'
+                : 'bg-red-500'
+            } absolute shadow-md text-white py-3 rounded-md mb-4 px-4 my-1`}
+          >
+            {over}
+          </div>
+        )}
         <div className="my-2 bg-gray-800 rounded-md shadow-md p-4 mb-4 w-full">
           <h2 className="text-2xl font-bold">Game Room: {room}</h2>
         </div>
