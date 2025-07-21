@@ -15,8 +15,8 @@ export default function Game({ players, room, orientation, cleanup }) {
   const [pieceSquare, setPieceSquare] = useState('');
   const { width, height } = useWindowSize();
   const audioRef = useRef(new Audio(winsound));
-  const [time, setTime] = useState(0);
-  const [chatMessages, setChatMessages] = useState([]);
+
+  console.log(players, room, orientation);
 
   // onDrop function
   function onDrop(sourceSquare, targetSquare) {
@@ -73,8 +73,7 @@ export default function Game({ players, room, orientation, cleanup }) {
 
         return result;
       } catch (e) {
-        console.log('error: ', e);
-
+        console.log('Error in makeAMove', e);
         return null;
       } // null if the move was illegal, the move object if the move was legal
     },
@@ -83,6 +82,8 @@ export default function Game({ players, room, orientation, cleanup }) {
 
   // keep clicked square style and remove hint squares
   const removeHighlightSquare = () => {
+    console.log('removeHighlightSquare');
+
     setSquareStyles(() => squareStyling({ pieceSquare, history }));
   };
 
@@ -91,7 +92,6 @@ export default function Game({ players, room, orientation, cleanup }) {
     console.log('highlightSquare', sourceSquare, squaresToHighlight);
     const res = squareStyling({ history, pieceSquare });
     console.log(res);
-
     const highlightStyles = [sourceSquare, ...squaresToHighlight].reduce(
       (a, c) => {
         return {
@@ -153,55 +153,30 @@ export default function Game({ players, room, orientation, cleanup }) {
     setPieceSquare('');
   };
 
-  const sentMessage = useCallback(
-    (message) => {
-      socket.emit('sentMessage', {
-        roomId: room,
-        username: players.find((p) => p.orientation === orientation)?.username,
-        text: message,
-      });
-    },
-    [room, players, orientation]
-  );
+  // useEffect(() => {
+  //   socket.on('move', (move) => {
+  //     makeAMove(move);
+  //   });
+  // }, [makeAMove]);
 
-  useEffect(() => {
-    socket.on('move', (move) => {
-      makeAMove(move);
-    });
-  }, [makeAMove]);
+  // useEffect(() => {
+  //   socket.on('playerDisconnected', (player) => {
+  //     setOver(`${player.username} has disconnected`); // set game over
+  //   });
+  // }, []);
 
-  useEffect(() => {
-    socket.on('playerDisconnected', (player) => {
-      setOver(`${player.username} has disconnected`); // set game over
-    });
-  }, []);
-
-  useEffect(() => {
-    socket.on('closeRoom', ({ roomId }) => {
-      console.log('closeRoom', roomId, room);
-      if (roomId === room) {
-        cleanup();
-      }
-    });
-  }, [room, cleanup]);
-
-  useEffect(() => {
-    socket.on('sendedMessage', (message) => {
-      console.log('sendedMessage:', message);
-      setChatMessages((prev) => [...prev, message]);
-    });
-  }, [sentMessage]);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setTime((prev) => prev + 1);
-    }, 1000);
-    return () => clearInterval(interval);
-  }, []);
+  // useEffect(() => {
+  //   socket.on('closeRoom', ({ roomId }) => {
+  //     console.log('closeRoom', roomId, room);
+  //     if (roomId === room) {
+  //       cleanup();
+  //     }
+  //   });
+  // }, [room, cleanup]);
 
   // Game component returned jsx
   return (
-    <div className='bg-gray-900 text-white w-full h-screen'>
+    <div className="bg-gray-900 text-white w-full h-screen">
       <Confetti
         width={width}
         height={height}
@@ -213,86 +188,47 @@ export default function Game({ players, room, orientation, cleanup }) {
             (over.includes('white') && orientation === 'white'))
         }
       />
-      <div className='container mx-auto flex flex-col justify-center items-centers'>
+      <div className="container mx-auto flex flex-col justify-center items-center">
         {over && (
-            <div
-              className={`${
-                over.includes('Draw')
-                  ? 'bg-yellow-500'
-                  : over.includes('wins') &&
-                    ((over.includes('black') && orientation === 'black') ||
-                      (over.includes('white') && orientation === 'white'))
-                  ? 'bg-green-500'
-                  : 'bg-red-500'
-              } absolute shadow-md text-white py-3 rounded-md mb-4 px-4 my-1`}
-            >
-              {over}
-            </div>
-          )}
-        <div className="my-2 flex flex-row items-center justify-between bg-gray-800 rounded-md shadow-md p-4 mb-4 w-full">
-          <h2 className="text-2xl font-bold">Chess</h2>
-          <p className='m-0'>Turn: {chess.turn()==='w' ? 'White' : 'Black'}</p>
-          <p className='m-0'>Time: {time}s</p>
-        </div>
-        <div className="flex flex-row justify-between">
           <div
-            className="board"
-            style={{
-              maxWidth: 700,
-              maxHeight: 700,
-              flexGrow: 1,
-            }}
+            className={`${
+              over.includes('Draw')
+                ? 'bg-yellow-500'
+                : over.includes('wins') &&
+                  ((over.includes('black') && orientation === 'black') ||
+                    (over.includes('white') && orientation === 'white'))
+                ? 'bg-green-500'
+                : 'bg-red-500'
+            } absolute shadow-md text-white py-3 rounded-md mb-4 px-4 my-1`}
           >
-            <Chessboard
-              id="humanVsHuman"
-              position={fen}
-              onPieceDrop={onDrop}
-              onMouseOverSquare={onMouseOverSquare}
-              onMouseOutSquare={onMouseOutSquare}
-              onSquareClick={onSquareClick}
-              orientation={orientation}
-              customBoardStyle={{
-                borderRadius: '5px',
-                boxShadow: `0 5px 15px rgba(0, 0, 0, 0.5)`,
-              }}
-              customSquareStyles={squareStyles}
-            />
+            {over}
           </div>
-          <div className='flex flex-col w-full max-w-md ms-4'>
-            <div className='border-collapse border-2 w-full border-gray-700 rounded-lg p-4 mb-4 max-h-40'>
-              <h2 className="text-2xl font-bold">Players:</h2>
-              <ul className="list-disc list-inside">
-                {players.map((player) => (
-                  <li key={player.id} className="text-lg">
-                    {player.username} ({player.orientation})
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div className='border-collapse border-2 w-full border-gray-700 rounded-lg p-4 mb-4'>
-              <h2 className="text-2xl font-bold text-center">Chat:</h2>
-              <ul className="list-disc list-inside h-60 overflow-y-scroll" style={{ scrollbarColor: '#4A5568 #2D3748' }}>
-                {chatMessages.map((message, index) => (
-                  <li key={index} className="text-lg">
-                    <strong>{message.username}:</strong> {message.text}
-                  </li>
-                ))}
-              </ul>
-              <div className="mt-2">
-                <input
-                  type="text"
-                  placeholder="Type a message..."
-                  className="w-full p-2 border border-gray-600 rounded-lg bg-gray-800 text-white"
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && e.target.value.trim() !== '') {
-                      sentMessage(e.target.value);
-                      e.target.value = '';
-                    }
-                  }}
-                />
-              </div>
-            </div>
-          </div>
+        )}
+        <div className="my-2 bg-gray-800 rounded-md shadow-md p-4 mb-4 w-full">
+          <h2 className="text-2xl font-bold">Game Room: {room}</h2>
+        </div>
+        <div
+          className="board"
+          style={{
+            maxWidth: 700,
+            maxHeight: 700,
+            flexGrow: 1,
+          }}
+        >
+          <Chessboard
+            id="humanVsHuman"
+            position={fen}
+            onPieceDrop={onDrop}
+            onMouseOverSquare={onMouseOverSquare}
+            onMouseOutSquare={onMouseOutSquare}
+            onSquareClick={onSquareClick}
+            orientation={orientation}
+            customBoardStyle={{
+              borderRadius: '5px',
+              boxShadow: `0 5px 15px rgba(0, 0, 0, 0.5)`,
+            }}
+            customSquareStyles={squareStyles}
+          />
         </div>
       </div>
     </div>

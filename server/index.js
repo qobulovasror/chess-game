@@ -91,6 +91,17 @@ io.on('connection', (socket) => {
     socket.to(args.roomId).emit('opponentJoined', roomUpdate);
   });
 
+  socket.on('sentMessage', (data) => {
+    console.log('sentMessage:', data);
+    const roomId = data?.roomId || Array.from(socket.rooms)[1]; // get the roomId from the socket's rooms
+    const room = rooms.get(roomId);
+    if(!room) return; // if room does not exist, exit
+    socket.to(roomId).emit('sendedMessage', {
+      username: data.username,
+      text: data?.text,
+    });
+  });
+
   socket.on('startGame', (roomId) => {
     const room = rooms.get(roomId);
     if (room) {
