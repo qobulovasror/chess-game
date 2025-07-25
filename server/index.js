@@ -92,7 +92,6 @@ io.on('connection', (socket) => {
   });
 
   socket.on('sentMessage', (data) => {
-    console.log('sentMessage:', data);
     const roomId = data?.roomId || Array.from(socket.rooms)[1]; // get the roomId from the socket's rooms
     const room = rooms.get(roomId);
     if(!room) return; // if room does not exist, exit

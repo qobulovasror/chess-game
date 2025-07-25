@@ -5,8 +5,9 @@ import Confetti from 'react-confetti';
 import { useWindowSize } from 'react-use';
 import winsound from '../assets/win.mp3';
 import socket from '@/socket';
+import { toast } from 'react-toastify';
 
-export default function Game({ players, room, orientation, cleanup }) {
+export default function Game({ players, room, orientation, cleanup, username }) {
   const chess = useMemo(() => new Chess(), []); // <- 1
   const [fen, setFen] = useState(chess.fen()); // <- 2
   const [over, setOver] = useState('');
@@ -17,7 +18,8 @@ export default function Game({ players, room, orientation, cleanup }) {
   const audioRef = useRef(new Audio(winsound));
   const [time, setTime] = useState(0);
   const [chatMessages, setChatMessages] = useState([]);
-
+  const chatRef = useRef(null);
+  
   // onDrop function
   function onDrop(sourceSquare, targetSquare) {
     const moveData = {
@@ -157,24 +159,46 @@ export default function Game({ players, room, orientation, cleanup }) {
     (message) => {
       socket.emit('sentMessage', {
         roomId: room,
-        username: players.find((p) => p.orientation === orientation)?.username,
+        username: username,
         text: message,
       });
+      setChatMessages((prev) => [...prev, { username: username, text: message }]);
+      scrollToBottom();
     },
-    [room, players, orientation]
+    [room, username]
   );
+
+  const scrollToBottom = () => {
+    if (chatRef.current) {
+      setTimeout(() => {
+        chatRef.current.scrollTo({
+          top: chatRef.current.scrollHeight,
+          behavior: 'smooth'
+        });
+      }, 300);
+    }
+  }
 
   useEffect(() => {
     socket.on('move', (move) => {
       makeAMove(move);
     });
+    
+    return () => {
+      socket.off('move');
+    };
   }, [makeAMove]);
 
   useEffect(() => {
     socket.on('playerDisconnected', (player) => {
-      setOver(`${player.username} has disconnected`); // set game over
+      setOver(`${player.username} has disconnected`);
+      toast.error(`${player.username} has disconnected`);
+      cleanup();
     });
-  }, []);
+    return () => {
+      socket.off('playerDisconnected');
+    };
+  }, [cleanup]);
 
   useEffect(() => {
     socket.on('closeRoom', ({ roomId }) => {
@@ -183,13 +207,21 @@ export default function Game({ players, room, orientation, cleanup }) {
         cleanup();
       }
     });
+    
+    return () => {
+      socket.off('closeRoom');
+    };
   }, [room, cleanup]);
 
   useEffect(() => {
     socket.on('sendedMessage', (message) => {
-      console.log('sendedMessage:', message);
       setChatMessages((prev) => [...prev, message]);
+      scrollToBottom();
     });
+    
+    return () => {
+      socket.off('sendedMessage');
+    };
   }, [sentMessage]);
 
   useEffect(() => {
@@ -201,7 +233,7 @@ export default function Game({ players, room, orientation, cleanup }) {
 
   // Game component returned jsx
   return (
-    <div className='bg-gray-900 text-white w-full h-screen'>
+    <div className='bg-gray-900 text-white w-full md:h-screen'>
       <Confetti
         width={width}
         height={height}
@@ -213,7 +245,7 @@ export default function Game({ players, room, orientation, cleanup }) {
             (over.includes('white') && orientation === 'white'))
         }
       />
-      <div className='container mx-auto flex flex-col justify-center items-centers'>
+      <div className='container mx-auto flex flex-col justify-center items-centers md:w-2/3'>
         {over && (
             <div
               className={`${
@@ -234,9 +266,9 @@ export default function Game({ players, room, orientation, cleanup }) {
           <p className='m-0'>Turn: {chess.turn()==='w' ? 'White' : 'Black'}</p>
           <p className='m-0'>Time: {time}s</p>
         </div>
-        <div className="flex flex-row justify-between">
+        <div className="flex flex-row justify-between w-full sm:flex-col">
           <div
-            className="board"
+            className="board w-1/2 sm:w-full"
             style={{
               maxWidth: 700,
               maxHeight: 700,
@@ -250,7 +282,7 @@ export default function Game({ players, room, orientation, cleanup }) {
               onMouseOverSquare={onMouseOverSquare}
               onMouseOutSquare={onMouseOutSquare}
               onSquareClick={onSquareClick}
-              orientation={orientation}
+              orientation={'black'}
               customBoardStyle={{
                 borderRadius: '5px',
                 boxShadow: `0 5px 15px rgba(0, 0, 0, 0.5)`,
@@ -258,7 +290,7 @@ export default function Game({ players, room, orientation, cleanup }) {
               customSquareStyles={squareStyles}
             />
           </div>
-          <div className='flex flex-col w-full max-w-md ms-4'>
+          <div className='flex flex-col w-full max-w-md ms-4 sm:mt-4'>
             <div className='border-collapse border-2 w-full border-gray-700 rounded-lg p-4 mb-4 max-h-40'>
               <h2 className="text-2xl font-bold">Players:</h2>
               <ul className="list-disc list-inside">
@@ -271,10 +303,10 @@ export default function Game({ players, room, orientation, cleanup }) {
             </div>
             <div className='border-collapse border-2 w-full border-gray-700 rounded-lg p-4 mb-4'>
               <h2 className="text-2xl font-bold text-center">Chat:</h2>
-              <ul className="list-disc list-inside h-60 overflow-y-scroll" style={{ scrollbarColor: '#4A5568 #2D3748' }}>
+              <ul ref={chatRef} className="list-inside h-60 overflow-y-scroll pe-1" style={{ scrollbarColor: '#4A5568 #2D3748' }}>
                 {chatMessages.map((message, index) => (
-                  <li key={index} className="text-lg">
-                    <strong>{message.username}:</strong> {message.text}
+                  <li key={index} className={`text-lg py-2 px-3 rounded-md bg-gray-700 max-w-2/3 mb-1 break-words ${message.username == username ? 'justify-self-end' : 'justify-self-start'}`} style={{width: 'max-content', maxWidth: '50%'}}>
+                    <strong className='text-blue-500'>{message.username}:</strong> {message.text}
                   </li>
                 ))}
               </ul>

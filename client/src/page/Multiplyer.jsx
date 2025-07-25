@@ -56,6 +56,7 @@ export default function Multiplayer() {
           room={room}
           orientation={orientation}
           cleanup={cleanup}
+          username={userName}
         />
       ) : (
         <BeforeStart
