@@ -22,6 +22,7 @@ export default function Game({ players, room, orientation, cleanup, username }) 
   
   // onDrop function
   function onDrop(sourceSquare, targetSquare) {
+    if (chess.turn() !== orientation[0]) return false;
     const moveData = {
       from: sourceSquare,
       to: targetSquare,
@@ -37,6 +38,10 @@ export default function Game({ players, room, orientation, cleanup, username }) 
     setFen(chess.fen());
     setHistory(chess.history({ verbose: true }));
     setSquareStyles(() => squareStyling({ pieceSquare, history }));
+    socket.emit("move", {
+      move,
+      room,
+    }); // this event will be transmitted to the opponent via the server
     return true;
   }
 
@@ -45,8 +50,6 @@ export default function Game({ players, room, orientation, cleanup, username }) 
       try {
         const result = chess.move(move); // update Chess instance
         setFen(chess.fen()); // update fen state to trigger a re-render
-
-        console.log('over, checkmate', chess.isGameOver(), chess.isCheckmate());
 
         if (chess.isGameOver()) {
           // check if move led to "game over"
@@ -90,9 +93,8 @@ export default function Game({ players, room, orientation, cleanup, username }) 
 
   // show possible moves
   const highlightSquare = (sourceSquare, squaresToHighlight) => {
-    console.log('highlightSquare', sourceSquare, squaresToHighlight);
-    const res = squareStyling({ history, pieceSquare });
-    console.log(res);
+    // const res = squareStyling({ history, pieceSquare });
+    // console.log(res);
 
     const highlightStyles = [sourceSquare, ...squaresToHighlight].reduce(
       (a, c) => {
@@ -138,6 +140,7 @@ export default function Game({ players, room, orientation, cleanup, username }) 
   const onSquareClick = (square) => {
     setSquareStyles(() => squareStyling({ pieceSquare: square, history }));
     setPieceSquare(square);
+    if (chess.turn() !== orientation[0]) return;
 
     const moveData = {
       from: pieceSquare,
@@ -202,7 +205,6 @@ export default function Game({ players, room, orientation, cleanup, username }) 
 
   useEffect(() => {
     socket.on('closeRoom', ({ roomId }) => {
-      console.log('closeRoom', roomId, room);
       if (roomId === room) {
         cleanup();
       }
@@ -233,7 +235,7 @@ export default function Game({ players, room, orientation, cleanup, username }) 
 
   // Game component returned jsx
   return (
-    <div className='bg-gray-900 text-white w-full md:h-screen'>
+    <div className='bg-gray-900 text-white w-full lg:h-screen'>
       <Confetti
         width={width}
         height={height}
@@ -266,9 +268,9 @@ export default function Game({ players, room, orientation, cleanup, username }) 
           <p className='m-0'>Turn: {chess.turn()==='w' ? 'White' : 'Black'}</p>
           <p className='m-0'>Time: {time}s</p>
         </div>
-        <div className="flex flex-row justify-between w-full sm:flex-col">
+        <div className="flex md:flex-row justify-between w-full flex-col">
           <div
-            className="board w-1/2 sm:w-full"
+            className="board md:w-1/2 w-full"
             style={{
               maxWidth: 700,
               maxHeight: 700,
@@ -282,7 +284,7 @@ export default function Game({ players, room, orientation, cleanup, username }) 
               onMouseOverSquare={onMouseOverSquare}
               onMouseOutSquare={onMouseOutSquare}
               onSquareClick={onSquareClick}
-              orientation={'black'}
+              boardOrientation={orientation}
               customBoardStyle={{
                 borderRadius: '5px',
                 boxShadow: `0 5px 15px rgba(0, 0, 0, 0.5)`,
@@ -336,15 +338,15 @@ const squareStyling = ({ pieceSquare, history }) => {
   const targetSquare = history.length && history[history.length - 1].to;
 
   return {
-    [pieceSquare]: { border: '5px solid #FFFF00A8' },
+    [pieceSquare]: { border: '3px solid #FFFF00A8' },
     ...(history.length && {
       [sourceSquare]: {
-        border: '5px solid #FFFF00A8',
+        border: '3px solid #FFFF00A8',
       },
     }),
     ...(history.length && {
       [targetSquare]: {
-        border: '5px solid #FFFF00A8',
+        border: '3px solid #FFFF00A8',
       },
     }),
   };
