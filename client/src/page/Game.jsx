@@ -6,6 +6,7 @@ import { useWindowSize } from 'react-use';
 import winsound from '../assets/win.mp3';
 import socket from '@/socket';
 import { toast } from 'react-toastify';
+import { squareStyling } from '@/lib/scuareStyle';
 
 export default function Game({ players, room, orientation, cleanup, username }) {
   const chess = useMemo(() => new Chess(), []); // <- 1
@@ -332,22 +333,3 @@ export default function Game({ players, room, orientation, cleanup, username }) 
     </div>
   );
 }
-
-const squareStyling = ({ pieceSquare, history }) => {
-  const sourceSquare = history.length && history[history.length - 1].from;
-  const targetSquare = history.length && history[history.length - 1].to;
-
-  return {
-    [pieceSquare]: { border: '3px solid #FFFF00A8' },
-    ...(history.length && {
-      [sourceSquare]: {
-        border: '3px solid #FFFF00A8',
-      },
-    }),
-    ...(history.length && {
-      [targetSquare]: {
-        border: '3px solid #FFFF00A8',
-      },
-    }),
-  };
-};

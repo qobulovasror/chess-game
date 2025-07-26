@@ -2,75 +2,85 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Chess } from 'chess.js';
 import { Chessboard } from 'react-chessboard';
 
-const STOCKFISH = window.STOCKFISH || 'https://cdn.jsdelivr.net/gh/nmrugg/stockfish.js/src/stockfish.asm.js';
+const boardStyle = {
+  borderRadius: '5px',
+  boxShadow: `0 5px 15px rgba(0, 0, 0, 0.5)`,
+};
+
+// Use a working CDN version of Stockfish
+const STOCKFISH_PATH = 'https://cdn.jsdelivr.net/gh/nmrugg/stockfish.js/src/stockfish.asm.js';
 
 function PlayWithComputer() {
   const [fen, setFen] = useState('start');
   const [engine, setEngine] = useState(null);
+  const [gameOver, setGameOver] = useState(false);
   const gameRef = useRef(new Chess());
+  const engineRef = useRef(null);
+  const intervalRef = useRef(null);
 
   useEffect(() => {
     setFen(gameRef.current.fen());
     const newEngine = engineGame();
     newEngine.prepareMove();
     setEngine(newEngine);
+    engineRef.current = newEngine;
+    
+    return () => {
+      // Cleanup: terminate workers and clear interval
+      if (engineRef.current && engineRef.current.terminate) {
+        engineRef.current.terminate();
+      }
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+    };
   }, []);
 
   const onDrop = ({ sourceSquare, targetSquare }) => {
-    const game = gameRef.current; 
+    if (!engine || gameOver) return false;
+    const game = gameRef.current;
     const move = game.move({
       from: sourceSquare,
       to: targetSquare,
       promotion: 'q',
     });
-  
     if (!move) return false;
-  
     setFen(game.fen());
-  
-    if (engine) {
-      engine.prepareMove(); // mavjud engine orqali chaqirish
+    
+    // Check if game is over after player move
+    if (game.isGameOver()) {
+      setGameOver(true);
+      return true;
     }
+    
+    engine.prepareMove();
     return true;
   };
 
-  const engineGame = (options) => {
-    options = options || {};
-
-    /// We can load Stockfish via Web Workers or via STOCKFISH() if loaded from a <script> tag.
-    let engine =
-      typeof STOCKFISH === 'function'
-        ? STOCKFISH()
-        : new Worker(options.stockfishjs || 'stockfish.js');
-    let evaler =
-      typeof STOCKFISH === 'function'
-        ? STOCKFISH()
-        : new Worker(options.stockfishjs || 'stockfish.js');
-
-    // let engine = STOCKFISH()
-
+  const engineGame = () => {
+    // Create a blob URL for the Stockfish worker
+    const stockfishBlob = new Blob([`
+      importScripts('${STOCKFISH_PATH}');
+    `], { type: 'application/javascript' });
+    
+    let engine = new Worker(URL.createObjectURL(stockfishBlob));
+    let evaler = new Worker(URL.createObjectURL(stockfishBlob));
     let engineStatus = {};
     let time = { wtime: 3000, btime: 3000, winc: 1500, binc: 1500 };
-    let playerColor = 'black';
     let clockTimeoutID = null;
-    // let isEngineRunning = false;
-    let announced_isGameOver;
-    // do not pick up pieces if the game is over
-    // only pick up pieces for White
+    let announced_isGameOver = false;
 
-    setInterval(function () {
+    intervalRef.current = setInterval(function () {
       if (announced_isGameOver) {
         return;
       }
-
       if (gameRef.current.isGameOver()) {
         announced_isGameOver = true;
+        setGameOver(true);
       }
     }, 500);
 
     function uciCmd(cmd, which) {
-      // console.log('UCI: ' + cmd);
-
       (which || engine).postMessage(cmd);
     }
     uciCmd('uci');
@@ -115,13 +125,11 @@ function PlayWithComputer() {
     function get_moves() {
       let moves = '';
       let history = gameRef.current.history({ verbose: true });
-
       for (let i = 0; i < history.length; ++i) {
         let move = history[i];
         moves +=
           ' ' + move.from + move.to + (move.promotion ? move.promotion : '');
       }
-
       return moves;
     }
 
@@ -129,13 +137,10 @@ function PlayWithComputer() {
       stopClock();
       let turn = gameRef.current.turn() === 'w' ? 'white' : 'black';
       if (!gameRef.current.isGameOver()) {
-        // if (turn === playerColor) {
-        if (turn !== playerColor) {
-          // playerColor = playerColor === 'white' ? 'black' : 'white';
+        if (turn !== 'white') {
           uciCmd('position startpos moves' + get_moves());
           uciCmd('position startpos moves' + get_moves(), evaler);
           uciCmd('eval', evaler);
-
           if (time && time.wtime) {
             uciCmd(
               'go ' +
@@ -152,7 +157,6 @@ function PlayWithComputer() {
           } else {
             uciCmd('go ' + (time.depth ? 'depth ' + time.depth : ''));
           }
-          // isEngineRunning = true;
         }
         if (gameRef.current.history().length >= 2 && !time.depth && !time.nodes) {
           startClock();
@@ -161,17 +165,7 @@ function PlayWithComputer() {
     };
 
     evaler.onmessage = function (event) {
-      let line;
-
-      if (event && typeof event === 'object') {
-        line = event.data;
-      } else {
-        line = event;
-      }
-
-      // console.log('evaler: ' + line);
-
-      /// Ignore some output.
+      let line = event && typeof event === 'object' ? event.data : event;
       if (
         line === 'uciok' ||
         line === 'readyok' ||
@@ -182,47 +176,37 @@ function PlayWithComputer() {
     };
 
     engine.onmessage = (event) => {
-      let line;
-
-      if (event && typeof event === 'object') {
-        line = event.data;
-      } else {
-        line = event;
-      }
-      // console.log('Reply: ' + line);
+      let line = event && typeof event === 'object' ? event.data : event;
       if (line === 'uciok') {
         engineStatus.engineLoaded = true;
       } else if (line === 'readyok') {
         engineStatus.engineReady = true;
       } else {
         let match = line.match(/^bestmove ([a-h][1-8])([a-h][1-8])([qrbn])?/);
-        /// Did the AI move?
         if (match) {
-          // isEngineRunning = false;
           gameRef.current.move({ from: match[1], to: match[2], promotion: match[3] });
           setFen(gameRef.current.fen());
+          
+          // Check if game is over after engine move
+          if (gameRef.current.isGameOver()) {
+            setGameOver(true);
+            return;
+          }
+          
           prepareMove();
           uciCmd('eval', evaler);
-          //uciCmd("eval");
-          /// Is it sending feedback?
         } else if (
           (match = line.match(/^info .*\bdepth (\d+) .*\bnps (\d+)/))
         ) {
           engineStatus.search = 'Depth: ' + match[1] + ' Nps: ' + match[2];
         }
-
-        /// Is it sending feed back with a score?
         if ((match = line.match(/^info .*\bscore (\w+) (-?\d+)/))) {
           let score = parseInt(match[2], 10) * (gameRef.current.turn() === 'w' ? 1 : -1);
-          /// Is it measuring in centipawns?
           if (match[1] === 'cp') {
             engineStatus.score = (score / 100.0).toFixed(2);
-            /// Did it find a mate?
           } else if (match[1] === 'mate') {
             engineStatus.score = 'Mate in ' + Math.abs(score);
           }
-
-          /// Is the score bounded?
           if ((match = line.match(/\b(upper|lower)bound\b/))) {
             engineStatus.score =
               ((match[1] === 'upper') === (gameRef.current.turn() === 'w')
@@ -231,9 +215,9 @@ function PlayWithComputer() {
           }
         }
       }
-      // displayStatus();
     };
 
+    // Add terminate method for cleanup
     return {
       start: function () {
         uciCmd('ucinewgame');
@@ -246,25 +230,49 @@ function PlayWithComputer() {
       prepareMove: function () {
         prepareMove();
       },
+      terminate: function () {
+        engine.terminate();
+        evaler.terminate();
+      },
     };
   };
 
+  const getGameStatus = () => {
+    if (gameOver) {
+      if (gameRef.current.isCheckmate()) {
+        return gameRef.current.turn() === 'w' ? 'Black wins!' : 'White wins!';
+      } else if (gameRef.current.isDraw()) {
+        return 'Draw!';
+      } else if (gameRef.current.isStalemate()) {
+        return 'Stalemate!';
+      }
+    }
+    return `Turn: ${gameRef.current.turn() === 'w' ? 'White' : 'Black'}`;
+  };
 
   return (
-    <Chessboard
-      id="stockfish"
-      position={fen}
-      onDrop={onDrop}
-      width={320}
-      boardStyle={boardStyle}
-      orientation="black"
-    />
+    <div className='bg-gray-900 text-white w-full h-screen'>
+      <div className='container mx-auto flex flex-col justify-center items-center md:w-2/3'>
+        <div className="my-2 flex flex-row items-center justify-between bg-gray-800 rounded-md shadow-md p-4 mb-4 w-full">
+          <h2 className="text-2xl font-bold">Chess vs Computer</h2>
+          <p className="text-sm text-red-500 opacity-80">
+            Sorry, currently this feature is not working.
+          </p>
+          <p className='m-0'>{getGameStatus()}</p>
+        </div>
+        <div className="flex justify-center w-full lg:w-1/2">
+          <Chessboard
+            id="stockfish"
+            position={fen}
+            onDrop={onDrop}
+            width={320}
+            boardStyle={boardStyle}
+            orientation="white"
+          />
+        </div>
+      </div>
+    </div>
   );
 }
 
 export default PlayWithComputer;
-
-const boardStyle = {
-  borderRadius: '5px',
-  boxShadow: `0 5px 15px rgba(0, 0, 0, 0.5)`,
-};
